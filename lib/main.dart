@@ -39,7 +39,7 @@ class MyApp extends StatelessWidget {
               ),
               Text("KrakFlow"),
               Text("Organizacja studiów"),
-              Text("Dzisiejsze zadania"),
+              Text("Dzisiejsze zadanka"),
               SizedBox(height: 100),
               Expanded(
                   child: ListView.builder(
