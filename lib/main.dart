@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'taskRepo.dart';
 import 'taskCard.dart';
 import 'manipulateTasks.dart';
+import 'dart:convert';
+import './services/task_api_service.dart';
 
 void main() {
   runApp(MyApp());
@@ -19,7 +21,6 @@ class MyApp extends StatelessWidget {
 class HomeScreen extends StatefulWidget {
   @override
   State<HomeScreen> createState() => _MyAppState();
-
 }
 
 class _MyAppState extends State<HomeScreen> {
@@ -106,87 +107,39 @@ class _MyAppState extends State<HomeScreen> {
 
               ),
               Expanded(
-                  child: ListView.builder(
-                    itemCount: filteredTasks.length,
-                    itemBuilder: (context, index) {
-                      final task = filteredTasks[index];
-                      return Dismissible(
-                          key: ValueKey(task.title),
-                          direction: DismissDirection.startToEnd,
-                          onDismissed: (direction) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text("rm: ${task.title}"),
-                              )
-                            );
-                            TaskRepository.remove(index); // chyba potrzebne zeby na task nie wrocil
-                          },
-                          child: TaskCard(
-                            title: task.title,
-                            subtitle: task.deadline,
-                            icon: Icons.eighteen_mp_sharp,
-                            done: task.done,
-                            onTap: () async {
-                              final realIndex = TaskRepository.task.indexOf(task);
-                              // trzeba zrobic real index poniewaz filteredTask tworzy
-                              // kopie i nowa liste, indexy nie sa zawsze takie same
-                              final Task? updatedTask = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => EditTaskScreen(
-                                        task: task
-                                    )
-                                ),
-                              );
-                              if (updatedTask != null) {
-                                setState(() {
-                                  TaskRepository.task[realIndex] = updatedTask;
-                              });
-                              }
-                            },
-                            onChanged: (value) async {
-                              final realIndex = TaskRepository.task.indexOf(task);
-                              setState(() {
-                                TaskRepository.task[realIndex] = Task(
-                                  title: task.title,
-                                  deadline: task.deadline,
-                                  done: value!
-                                );
-                              });
-                            }
-                      ));
-                    }),),
-                  IconButton(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              title: Text("potwierdzenie"),
-                              content: Text("czy na pewno chcesz usunac WSZYSKIE zadania?"),
-                              actions: [
-                                TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: Text("Anuluj")
-                                ),
-                                TextButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        TaskRepository.task.clear();
-                                      });
-                                      Navigator.pop(context);
-                                    },
-                                    child: Text("usun")
-                                ),
-                              ],
-                            );
-                          }
-                        );
-                      }, icon: Icon(Icons.delete)
-                  ),
-                SizedBox(height: 20),
-                ],
+                  child: TaskListScreen()
               ),
+              IconButton(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          title: Text("potwierdzenie"),
+                          content: Text("czy na pewno chcesz usunac WSZYSKIE zadania?"),
+                          actions: [
+                            TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: Text("Anuluj")
+                            ),
+                            TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    TaskRepository.task.clear();
+                                  });
+                                  Navigator.pop(context);
+                                },
+                                child: Text("usun")
+                            ),
+                          ],
+                        );
+                      }
+                    );
+                  }, icon: Icon(Icons.delete)
+              ),
+            SizedBox(height: 20),
+            ],
+          ),
           ),
         floatingActionButton: FloatingActionButton(
           onPressed: () async {
@@ -206,5 +159,89 @@ class _MyAppState extends State<HomeScreen> {
 }
 
 
+class TaskListScreen extends StatefulWidget {
+  const TaskListScreen({super.key});
 
+  @override
+  State<TaskListScreen> createState() => _TaskListScreenState();
+}
 
+class _TaskListScreenState extends State<TaskListScreen> {
+  late Future<List<Task>> tasksFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    tasksFuture = TaskApiService.fetchTasks();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Task>>(
+        future: tasksFuture,
+        builder: (context, snapshot) {
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text("blad: ${snapshot.error}"),
+            );
+          }
+
+          final tasks = snapshot.data!;
+
+          return ListView.builder(
+            itemCount: tasks.length,
+            itemBuilder: (context, index) {
+              final task = tasks[index];
+              return Dismissible(
+                  key: ValueKey(task.title),
+                  direction: DismissDirection.startToEnd,
+                  onDismissed: (direction) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("rm: ${task.title}"),
+                        )
+                    );
+                    TaskRepository.remove(index); // chyba potrzebne zeby na task nie wrocil
+                  },
+                  child: TaskCard(
+                      title: task.title,
+                      subtitle: task.deadline,
+                      icon: Icons.eighteen_mp_sharp,
+                      done: task.done,
+                      onTap: () async {
+                        final Task? updatedTask = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  EditTaskScreen(
+                                      task: task
+                                  )
+                          ),
+                        );
+                        if (updatedTask != null) {
+                          setState(() {
+                            TaskRepository.task[index] = updatedTask;
+                          });
+                        }
+                      },
+                      onChanged: (value) async {
+                        setState(() {
+                          TaskRepository.task[index] = Task(
+                              title: task.title,
+                              deadline: task.deadline,
+                              done: value!
+                          );
+                        });
+                      }
+                  ));
+            },
+          );
+        });
+  }
+}
