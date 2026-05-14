@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'taskRepo.dart';
 import 'taskCard.dart';
+import 'dart:math';
 
 
 class AddTaskScreen extends StatelessWidget {
@@ -43,7 +44,9 @@ class AddTaskScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 16),
                 ElevatedButton(onPressed: () {
-                  final newTask = Task(title: tileController.text,
+                  final newTask = Task(
+                      id: Random().nextInt(1000000),
+                      title: tileController.text,
                       deadline: deadlineController.text,
                       done: false);
 
@@ -96,7 +99,9 @@ class EditTaskScreen extends StatelessWidget {
                 //     }),
                 SizedBox(height: 16),
                 ElevatedButton(onPressed: () {
-                  final editedTask = Task(title: tileController.text,
+                  final editedTask = Task(
+                      id: Random().nextInt(1000000),
+                      title: tileController.text,
                       deadline: deadlineController.text,
                       done: false); //do zmiany po checkbox
 

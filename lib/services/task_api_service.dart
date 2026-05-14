@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 
 import '../taskRepo.dart';
 
+import 'dart:math';
+
 class TaskApiService {
   static const String baseUrl = "https://dummyjson.com";
   static Future<List<Task>> fetchTasks() async {
@@ -16,6 +18,7 @@ class TaskApiService {
 
       return todos.map((todo)  {
         return Task(
+          id: Random().nextInt(100000),
           title: todo['todo'],
           deadline: 'brak',
           done: todo['completed'],

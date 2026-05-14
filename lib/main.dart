@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:todo/services/task_local_db.dart';
+import 'package:todo/services/task_sync_service.dart';
 import 'taskRepo.dart';
 import 'taskCard.dart';
 import 'manipulateTasks.dart';
 import 'dart:convert';
 import './services/task_api_service.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Hive.initFlutter();
+  await Hive.openBox('tasks');
   runApp(MyApp());
 }
 
@@ -27,6 +34,18 @@ class _MyAppState extends State<HomeScreen> {
 
   String filter = "wszystkie";
   String selectedFilter = "wszystkie";
+
+  int allTaskCount = 0;
+  int doneTaskCount = 0;
+  int todoTaskCount = 0;
+
+  void updateCounter(List<Task> tasks) {
+    setState(() {
+      allTaskCount = tasks.length;
+      doneTaskCount = tasks.where((task) => task.done).length;
+      todoTaskCount = allTaskCount - doneTaskCount; // skrócik
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +126,9 @@ class _MyAppState extends State<HomeScreen> {
 
               ),
               Expanded(
-                  child: TaskListScreen()
+                  child: TaskListScreen(
+                    onTasksLoaded: updateCounter,
+                  ),
               ),
               IconButton(
                   onPressed: () {
@@ -125,7 +146,7 @@ class _MyAppState extends State<HomeScreen> {
                             TextButton(
                                 onPressed: () {
                                   setState(() {
-                                    TaskRepository.task.clear();
+                                    TaskLocalDb.deleteAtllTasks();
                                   });
                                   Navigator.pop(context);
                                 },
@@ -160,7 +181,9 @@ class _MyAppState extends State<HomeScreen> {
 
 
 class TaskListScreen extends StatefulWidget {
-  const TaskListScreen({super.key});
+  final ValueChanged<List<Task>> onTasksLoaded;
+
+  const TaskListScreen({super.key, required this.onTasksLoaded});
 
   @override
   State<TaskListScreen> createState() => _TaskListScreenState();
@@ -173,6 +196,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
   void initState() {
     super.initState();
     tasksFuture = TaskApiService.fetchTasks();
+  }
+
+  Future<List<Task>> loadTasks() async {
+    await TaskSyncService.loadInitialDataIfNeeded();
+    return TaskLocalDb.getTasks();
   }
 
   @override
@@ -194,6 +222,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
           final tasks = snapshot.data!;
 
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onTasksLoaded(tasks);
+          });
+
           return ListView.builder(
             itemCount: tasks.length,
             itemBuilder: (context, index) {
@@ -207,7 +239,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           content: Text("rm: ${task.title}"),
                         )
                     );
-                    TaskRepository.remove(index); // chyba potrzebne zeby na task nie wrocil
+                    TaskLocalDb.deleteTask(task.id); // chyba potrzebne zeby na task nie wrocil
                   },
                   child: TaskCard(
                       title: task.title,
@@ -225,19 +257,25 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           ),
                         );
                         if (updatedTask != null) {
+                          await TaskLocalDb.updateTask(updatedTask);
+
                           setState(() {
-                            TaskRepository.task[index] = updatedTask;
+                            tasksFuture = loadTasks();
                           });
                         }
                       },
                       onChanged: (value) async {
-                        setState(() {
-                          TaskRepository.task[index] = Task(
+                          final updatedTask = Task(
+                              id: task.id,
                               title: task.title,
                               deadline: task.deadline,
                               done: value!
                           );
-                        });
+                          await TaskLocalDb.updateTask(updatedTask);
+
+                          setState(() {
+                            tasksFuture = loadTasks();
+                          });
                       }
                   ));
             },
